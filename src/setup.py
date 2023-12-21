@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='leo-ttssrt',
+    name='talkyleo',
     version='0.0.1',
     description='',
     author='naelsondouglas',
@@ -9,6 +9,9 @@ setup(
     packages=[],
     install_requires=[
         'boto3',
+        'pysub-parser',
+        'pydantic',
+        'pydub'
     ],
     scripts=[],
 )
