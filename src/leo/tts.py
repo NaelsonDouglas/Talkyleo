@@ -1,34 +1,34 @@
 from pathlib import Path
-import tempfile
 import datetime
+import tempfile
 
-from dataclasses import dataclass
-
-import pydub
-from pysubparser.parser import parse
 from pysubparser.classes.subtitle import Subtitle
+from pysubparser.parser import parse
 from pysubparser import writer
 from pydub import AudioSegment
-import tempfile
+import pydub
 
 import polly
 
-class Clip:
+class _Clip:
     def __init__(self, subtitles:list[Subtitle]=None):
         self._subtitles:list[Subtitle] = subtitles
         self.fixed_subtitles:list[Subtitle] = list()
         self.audio:pydub.audio_segment.AudioSegment = pydub.audio_segment.AudioSegment.empty()
 
-    def compile(self):
-        '''Main method. reads the loaded _subtitles and creates the self with both the fixed subtitles and audios'''
+    def compile(self) -> tuple[tempfile.NamedTemporaryFile]:
+        '''Main method. reads the loaded _subtitles returns two temporary files: one containing the narration audio and other with the synced subtitles in srt'''
         for sub in self._subtitles:
             file = polly.synthetize(sub.text)
             audio = AudioSegment.from_file(file.name)
             fixed_subtitle = self._fix_subtitle(sub, audio)
             self.fixed_subtitles.append(fixed_subtitle)
             self.audio += audio
-        writer.write(self.fixed_subtitles, path='temp.srt')
-        self.audio.export('temp.mp3', format='mp3')
+        srt_file = tempfile.NamedTemporaryFile(mode='w', prefix='subtitle_', suffix='.srt')
+        audio_file = tempfile.NamedTemporaryFile(mode='w+b', prefix='audio_', suffix='.mp3')
+        writer.write(self.fixed_subtitles, path=srt_file.name)
+        self.audio.export(audio_file.name, format='mp3')
+        return (audio_file, srt_file)
 
     def _fix_subtitle(self, subtitle:Subtitle, audio:pydub.AudioSegment) -> Subtitle:
         '''Fix the syncronization of a subtitle by synching it to the audio'''
@@ -42,22 +42,23 @@ class Clip:
         fixed_subtitle = Subtitle(index=subtitle.index, start=new_start, end=new_end, lines=subtitle.lines)
         return fixed_subtitle
 
-    def _add_seconds_to_time(self, date: datetime.time, seconds: float) -> datetime.time:
-        total_seconds = date.hour * 3600 + date.minute * 60 + date.second + seconds
-        hours, remainder = divmod(total_seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return datetime.time(hours % 24, minutes, seconds)
-
-
-def from_file(srt_path:str) -> Clip:
-    '''Gets a string pointing to the path of a srt file and returns a Clip of it.'''
+def from_file(srt_path:str) -> tuple[tempfile.NamedTemporaryFile]:
+    '''Gets a string pointing to the path of a srt file and returns two temporary files: one containing the narration audio and other with the synced subtitles in srt'''
     _file = Path(srt_path).absolute()
     if not _file.exists():
         raise FileNotFoundError(_file)
-    return Clip(subtitles=list(parse(str(_file))))
+    return _Clip(subtitles=list(parse(str(_file)))).compile()
+
+def from_string(string:str) -> tuple[tempfile.NamedTemporaryFile]:
+    '''Gets with a valid srt subtitle and returns two temporary files: one containing the narration audio and other with the synced subtitles in srt . Wraps over `from_file`'''
+    with tempfile.NamedTemporaryFile(mode='w', prefix='sub_', suffix='.srt') as file:
+        file.write(string)
+        file.seek(0)
+        return from_file(file.name)
+
 
 
 if __name__ == '__main__':
-    clip = from_file('sample.srt')
-    clip.compile()
-    # clip._create_working_directory()clip
+    sample = '1\n00:00:00,000 --> 00:00:05,000\nNão costumo compartilhar, hoje decidi, desabafar sobre minha vida.\n\n2\n00:00:00,000 --> 00:00:05,000\nNão costumo compartilhar, hoje decidi, desabafar sobre minha vida.'
+    audio, srt = from_string(sample)
+    audio2, srt2 = from_file('sample.srt')
