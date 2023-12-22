@@ -8,7 +8,7 @@ from pysubparser import writer
 from pydub import AudioSegment
 import pydub
 
-import polly
+from talkyleo import polly
 
 class _Clip:
     def __init__(self, subtitles:list[Subtitle]=None):
