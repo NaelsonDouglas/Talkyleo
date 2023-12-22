@@ -1,1 +1,1 @@
-from talkyleo.tts import from_file, from_string
+from . import tts
